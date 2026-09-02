@@ -1,5 +1,9 @@
 const User = require("../models/User");
-const { hashPassword } = require("../services/authService");
+const {
+  hashPassword,
+  comparePassword,
+  generateToken,
+} = require("../services/authService");
 
 const register = async (req, res, next) => {
   try {
@@ -50,4 +54,44 @@ const register = async (req, res, next) => {
   }
 };
 
-module.exports = { register };
+const login = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      const error = new Error("Email and password are required");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      const error = new Error("Invalid email or password");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const isMatch = await comparePassword(password, user.password_hash);
+    if (!isMatch) {
+      const error = new Error("Invalid email or password");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      token: generateToken(user),
+      user: {
+        _id: user._id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { register, login };
