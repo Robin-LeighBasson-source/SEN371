@@ -26,7 +26,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 
-// Error handling middleware - must be registered after all routes
+// Error handling middleware
 app.use(notFound);
 app.use(errorHandler);
 
