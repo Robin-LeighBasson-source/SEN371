@@ -83,11 +83,14 @@ Vite prints a local URL, normally <http://localhost:5173>.
 
 There is **no route at `/`** yet — the landing page shows only the temporary nav bar. Use the links, or go straight to:
 
+- <http://localhost:5173/cart> — shopping cart (calls the backend)
+- <http://localhost:5173/wishlist> — wishlist (calls the backend)
 - <http://localhost:5173/checkout> — checkout page
 - <http://localhost:5173/orders> — order history (calls the backend)
 
-The API base URL is currently **hardcoded** as `http://localhost:5000` in
-`frontend/src/pages/OrderHistory.jsx`, so the backend must run on port 5000.
+The API base URL is currently **hardcoded** as `http://localhost:5000` — in
+`frontend/src/api.js` for the cart and wishlist pages, and in
+`frontend/src/pages/OrderHistory.jsx` — so the backend must run on port 5000.
 
 Other frontend scripts: `npm run build`, `npm run preview`, `npm run lint`.
 
@@ -138,6 +141,11 @@ Passwords must be at least 8 characters.
 | POST   | `/api/orders`           | JWT  | Creates an order from the user's cart, then clears it |
 | GET    | `/api/orders`           | JWT  | User's order history, newest first |
 | POST   | `/api/orders/:id/pay`   | JWT  | Simulated payment, marks the order `Paid` |
+| GET/POST/DELETE | `/api/cart`    | JWT  | View, add to, and empty the cart |
+| PUT/DELETE | `/api/cart/items/:productId` | JWT | Change a line's quantity / remove a line |
+| GET/POST | `/api/wishlist`       | JWT  | View the wishlist, save a product |
+| DELETE | `/api/wishlist/items/:productId` | JWT | Unsave a product |
+| POST   | `/api/wishlist/items/:productId/move-to-cart` | JWT | Move a saved product into the cart |
 | GET/POST/PUT/DELETE | `/api/products`, `/api/products/:id` | – | **Placeholder** — returns a message string |
 
 Errors come back uniformly as `{ "success": false, "message": "...", "stack": "..." }`.
@@ -149,8 +157,9 @@ Errors come back uniformly as `{ "success": false, "message": "...", "stack": ".
 Things to be aware of when running this in its current state:
 
 - **Product and user CRUD routes are placeholders** — they return hardcoded messages, not database records.
-- **No cart API exists.** `POST /api/orders` reads a `Cart` document for the logged-in user, so it
-  returns `400 Your cart is empty` unless a cart is inserted into MongoDB by hand.
+- **Products cannot be browsed.** The product routes are placeholders, so the cart and wishlist
+  pages ask you to paste a product id, and products must be inserted into MongoDB by hand.
+  See [CARTWISHLIST.md](CARTWISHLIST.md) for a step-by-step walkthrough.
 - **Checkout is front-end only.** `frontend/src/pages/Checkout.jsx` uses hardcoded cart items and shows
   a success message on submit; it never calls the backend. Only the Order History page talks to the API.
 - **No database seeding script**, so products/categories must be inserted manually to see real data.
@@ -169,4 +178,8 @@ cd backend && npm install && npm run dev
 cd frontend && npm install && npm run dev
 ```
 
-Then open <http://localhost:5173/orders>.
+Then open <http://localhost:5173/cart>.
+
+## Module documentation
+
+- [CARTWISHLIST.md](CARTWISHLIST.md) — the cart and wishlist features: how they work and why.

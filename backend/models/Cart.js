@@ -2,10 +2,13 @@ const mongoose = require("mongoose");
 
 const cartSchema = new mongoose.Schema(
   {
+    // unique: a shopper has exactly one cart, so the database rejects a second
+    // one even if two requests race to create it.
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      unique: true,
     },
     items: [
       {
