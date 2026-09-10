@@ -1,27 +1,46 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { request, formatRands } from '../api';
 
-export default function Checkout() {
-  // Hardcoded dummy data so you can see a live UI immediately
-  const [cartItems, setCartItems] = useState([
-    { id: 1, name: 'Wireless Mechanical Keyboard', price: 1299.99, quantity: 1 },
-    { id: 2, name: 'Ergonomic Gaming Mouse', price: 649.50, quantity: 2 },
-  ]);
+export default function Checkout({ token }) {
+  const [cart, setCart] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [formData, setFormData] = useState({
-    fullName: 'Robin-Leigh Basson',
-    email: 'robin@example.com',
-    address: '123 Tech Street',
-    city: 'Cape Town',
-    postalCode: '8001',
+    fullName: '',
+    email: '',
+    address: '',
+    city: '',
+    postalCode: '',
     cardNumber: '4242 •••• •••• 4242',
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Calculate total dynamically from dummy data
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const shipping = 100.00;
-  const total = subtotal + shipping;
+  useEffect(() => {
+    const loadCart = async () => {
+      try {
+        const data = await request('/api/cart', token);
+        setCart(data.cart);
+        setError(null);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCart();
+  }, [token]);
+
+  const items = cart?.items ?? [];
+  const subtotalCents = items.reduce(
+    (sum, item) => sum + (item.product_id?.price_cents ?? 0) * item.quantity,
+    0,
+  );
+  const shippingCents = items.length > 0 ? 10000 : 0;
+  const totalCents = subtotalCents + shippingCents;
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,6 +51,38 @@ export default function Checkout() {
     setIsSubmitted(true);
   };
 
+  if (loading) {
+    return (
+      <div style={styles.pageContainer}>
+        <h2>Loading checkout...</h2>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.pageContainer}>
+        <div style={styles.wrapper}>
+          <h2 style={styles.headerTitle}>Secure Checkout</h2>
+          <p style={{ color: 'red' }}>{error}</p>
+          <Link to="/cart">Back to cart</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div style={styles.pageContainer}>
+        <div style={styles.wrapper}>
+          <h2 style={styles.headerTitle}>Secure Checkout</h2>
+          <p>Your cart is empty. Add items before checking out.</p>
+          <Link to="/cart" style={{ fontWeight: 'bold' }}>Go to cart</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.pageContainer}>
       <div style={styles.wrapper}>
@@ -39,104 +90,104 @@ export default function Checkout() {
 
         {isSubmitted ? (
           <div style={styles.successBox}>
-            <h3>🎉 Order Placed Successfully!</h3>
+            <h3>Order Placed Successfully!</h3>
             <p>Thank you for your purchase, {formData.fullName}. Your order is being processed.</p>
           </div>
         ) : (
           <div style={styles.grid}>
-            {/* Left Column: Form Inputs */}
             <form onSubmit={handleCheckoutSubmit} style={styles.formSection}>
               <h3 style={styles.sectionTitle}>Shipping & Payment Info</h3>
-              
+
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Full Name</label>
-                <input 
-                  type="text" 
-                  name="fullName" 
-                  value={formData.fullName} 
-                  onChange={handleChange} 
-                  style={styles.input} 
-                  required 
+                <input
+                  type="text"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  style={styles.input}
+                  required
                 />
               </div>
 
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Email Address</label>
-                <input 
-                  type="email" 
-                  name="email" 
-                  value={formData.email} 
-                  onChange={handleChange} 
-                  style={styles.input} 
-                  required 
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  style={styles.input}
+                  required
                 />
               </div>
 
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Street Address</label>
-                <input 
-                  type="text" 
-                  name="address" 
-                  value={formData.address} 
-                  onChange={handleChange} 
-                  style={styles.input} 
-                  required 
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  style={styles.input}
+                  required
                 />
               </div>
 
               <div style={styles.row}>
                 <div style={styles.inputGroupHalf}>
                   <label style={styles.label}>City</label>
-                  <input 
-                    type="text" 
-                    name="city" 
-                    value={formData.city} 
-                    onChange={handleChange} 
-                    style={styles.input} 
-                    required 
+                  <input
+                    type="text"
+                    name="city"
+                    value={formData.city}
+                    onChange={handleChange}
+                    style={styles.input}
+                    required
                   />
                 </div>
                 <div style={styles.inputGroupHalf}>
                   <label style={styles.label}>Postal Code</label>
-                  <input 
-                    type="text" 
-                    name="postalCode" 
-                    value={formData.postalCode} 
-                    onChange={handleChange} 
-                    style={styles.input} 
-                    required 
+                  <input
+                    type="text"
+                    name="postalCode"
+                    value={formData.postalCode}
+                    onChange={handleChange}
+                    style={styles.input}
+                    required
                   />
                 </div>
               </div>
 
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Card Details (Simulated)</label>
-                <input 
-                  type="text" 
-                  name="cardNumber" 
-                  value={formData.cardNumber} 
-                  onChange={handleChange} 
-                  style={styles.input} 
-                  required 
+                <input
+                  type="text"
+                  name="cardNumber"
+                  value={formData.cardNumber}
+                  onChange={handleChange}
+                  style={styles.input}
+                  required
                 />
               </div>
 
               <button type="submit" style={styles.payButton}>
-                Pay R {total.toFixed(2)}
+                Pay {formatRands(totalCents)}
               </button>
             </form>
 
-            {/* Right Column: Order Summary */}
             <div style={styles.summarySection}>
               <h3 style={styles.sectionTitle}>Order Summary</h3>
               <div style={styles.itemList}>
-                {cartItems.map((item) => (
-                  <div key={item.id} style={styles.itemRow}>
+                {items.map((item) => (
+                  <div key={item.product_id._id} style={styles.itemRow}>
                     <div>
-                      <p style={styles.itemName}>{item.name}</p>
+                      <p style={styles.itemName}>{item.product_id.name}</p>
                       <p style={styles.itemQty}>Qty: {item.quantity}</p>
                     </div>
-                    <p style={styles.itemPrice}>R {(item.price * item.quantity).toFixed(2)}</p>
+                    <p style={styles.itemPrice}>
+                      {formatRands(item.product_id.price_cents * item.quantity)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -145,15 +196,15 @@ export default function Checkout() {
 
               <div style={styles.summaryLine}>
                 <span>Subtotal</span>
-                <span>R {subtotal.toFixed(2)}</span>
+                <span>{formatRands(subtotalCents)}</span>
               </div>
               <div style={styles.summaryLine}>
                 <span>Shipping</span>
-                <span>R {shipping.toFixed(2)}</span>
+                <span>{formatRands(shippingCents)}</span>
               </div>
               <div style={{ ...styles.summaryLine, fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' }}>
                 <span>Total</span>
-                <span>R {total.toFixed(2)}</span>
+                <span>{formatRands(totalCents)}</span>
               </div>
             </div>
           </div>
@@ -163,7 +214,6 @@ export default function Checkout() {
   );
 }
 
-// Clean inline styles to keep everything self-contained and neat
 const styles = {
   pageContainer: {
     backgroundColor: '#f8f9fa',
