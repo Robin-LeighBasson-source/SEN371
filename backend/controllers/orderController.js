@@ -20,9 +20,25 @@ const createOrder = async (req, res, next) => {
       return {
         product_id: item.product_id._id,
         quantity: item.quantity,
-        price_at_purchase_cents: currentPrice, 
+        price_at_purchase_cents: currentPrice,
       };
     });
+
+    const shipping = req.body.shipping || {};
+    const shippingSnapshot =
+      shipping.full_name ||
+      shipping.email ||
+      shipping.street_address ||
+      shipping.city ||
+      shipping.postal_code
+        ? {
+            full_name: shipping.full_name || "",
+            email: shipping.email || "",
+            street_address: shipping.street_address || "",
+            city: shipping.city || "",
+            postal_code: shipping.postal_code || "",
+          }
+        : undefined;
 
     const order = await Order.create({
       user_id: req.user._id,
@@ -30,12 +46,13 @@ const createOrder = async (req, res, next) => {
       order_status: "Pending",
       items: orderItems,
       shipping_address_id: req.body.shipping_address_id || null,
+      ...(shippingSnapshot ? { shipping_snapshot: shippingSnapshot } : {}),
     });
 
     await Cart.findOneAndDelete({ user_id: req.user._id });
     res.status(201).json({ success: true, order });
   } catch (error) {
-    next(error); 
+    next(error);
   }
 };
 
@@ -76,7 +93,9 @@ const processPayment = async (req, res, next) => {
 
 const getUserOrders = async (req, res, next) => {
   try {
-    const orders = await Order.find({ user_id: req.user._id }).sort({ created_at: -1 });
+    const orders = await Order.find({ user_id: req.user._id })
+      .populate("items.product_id", "name")
+      .sort({ created_at: -1 });
     res.json({ success: true, orders });
   } catch (error) {
     next(error);

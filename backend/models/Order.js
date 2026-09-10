@@ -15,6 +15,14 @@ const orderSchema = new mongoose.Schema(
       default: "Pending",
     },
     shipping_address_id: { type: mongoose.Schema.Types.ObjectId }, // Can map to a specific embedded address ID from User
+    // Snapshot of the address entered at checkout (not a User.addresses ref).
+    shipping_snapshot: {
+      full_name: String,
+      email: String,
+      street_address: String,
+      city: String,
+      postal_code: String,
+    },
     items: [
       {
         product_id: {
