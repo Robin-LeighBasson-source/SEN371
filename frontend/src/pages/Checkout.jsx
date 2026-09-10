@@ -9,6 +9,10 @@ export default function Checkout({ token }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [step, setStep] = useState('shipping');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [completedOrder, setCompletedOrder] = useState(null);
+  const [completedPayment, setCompletedPayment] = useState(null);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -50,13 +54,43 @@ export default function Checkout({ token }) {
 
   const handleShippingContinue = (e) => {
     e.preventDefault();
+    setSubmitError(null);
     setStep('payment');
   };
 
-  const handlePlaceOrder = (e) => {
+  const handlePlaceOrder = async (e) => {
     e.preventDefault();
-    // Task 3 will call POST /api/orders and POST /api/orders/:id/pay here.
-    setStep('confirmation');
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const orderResult = await request('/api/orders', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          shipping: {
+            full_name: formData.fullName,
+            email: formData.email,
+            street_address: formData.address,
+            city: formData.city,
+            postal_code: formData.postalCode,
+          },
+        }),
+      });
+
+      const payResult = await request(`/api/orders/${orderResult.order._id}/pay`, token, {
+        method: 'POST',
+        body: JSON.stringify({ payment_method: formData.paymentMethod }),
+      });
+
+      setCompletedOrder(payResult.order || orderResult.order);
+      setCompletedPayment(payResult.payment);
+      setCart({ ...(cart || {}), items: [] });
+      setStep('confirmation');
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -163,25 +197,33 @@ export default function Checkout({ token }) {
 
         {step === 'confirmation' ? (
           <div style={styles.successBox}>
-            <h3>Ready for payment wiring</h3>
-            <p>
-              Shipping and payment details are collected. Task 3 will create the
-              order and run the mock payment here.
-            </p>
+            <h3>Order placed successfully</h3>
+            <p>Thank you, {formData.fullName}. Your payment was simulated and the order is paid.</p>
             <p style={{ marginTop: '12px' }}>
-              <strong>{formData.fullName}</strong> · {formData.email}
+              <strong>Order ID:</strong> {completedOrder?._id}
               <br />
-              {formData.address}, {formData.city}, {formData.postalCode}
+              <strong>Status:</strong> {completedOrder?.order_status}
               <br />
-              Payment method: {formData.paymentMethod}
+              <strong>Total:</strong>{' '}
+              {formatRands(completedOrder?.total_amount_cents ?? totalCents)}
+              <br />
+              <strong>Payment:</strong> {completedPayment?.payment_method} ·{' '}
+              {completedPayment?.transaction_id}
             </p>
-            <button
-              type="button"
-              style={{ ...styles.secondaryButton, marginTop: '16px' }}
-              onClick={() => setStep('shipping')}
+            <p style={{ marginTop: '8px' }}>
+              {formData.address}, {formData.city}, {formData.postalCode}
+            </p>
+            <Link
+              to="/orders"
+              style={{
+                display: 'inline-block',
+                marginTop: '16px',
+                fontWeight: 'bold',
+                color: '#166534',
+              }}
             >
-              Back to shipping
-            </button>
+              View order history
+            </Link>
           </div>
         ) : (
           <div style={styles.grid}>
@@ -286,16 +328,31 @@ export default function Checkout({ token }) {
                   />
                 </div>
 
+                {submitError && (
+                  <p style={{ color: '#b91c1c', margin: 0 }}>{submitError}</p>
+                )}
+
                 <div style={styles.buttonRow}>
                   <button
                     type="button"
                     style={styles.secondaryButton}
                     onClick={() => setStep('shipping')}
+                    disabled={submitting}
                   >
                     Back
                   </button>
-                  <button type="submit" style={styles.payButton}>
-                    Place order · {formatRands(totalCents)}
+                  <button
+                    type="submit"
+                    style={{
+                      ...styles.payButton,
+                      opacity: submitting ? 0.7 : 1,
+                      cursor: submitting ? 'wait' : 'pointer',
+                    }}
+                    disabled={submitting}
+                  >
+                    {submitting
+                      ? 'Processing…'
+                      : `Place order · ${formatRands(totalCents)}`}
                   </button>
                 </div>
               </form>
