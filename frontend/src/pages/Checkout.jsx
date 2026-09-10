@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { request, formatRands } from '../api';
 
+const STEPS = ['shipping', 'payment', 'confirmation'];
+
 export default function Checkout({ token }) {
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [step, setStep] = useState('shipping');
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -14,9 +17,8 @@ export default function Checkout({ token }) {
     city: '',
     postalCode: '',
     cardNumber: '4242 •••• •••• 4242',
+    paymentMethod: 'Stripe',
   });
-
-  const [isSubmitted, setIsSubmitted] = useState(false);
 
   useEffect(() => {
     const loadCart = async () => {
@@ -46,9 +48,15 @@ export default function Checkout({ token }) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleCheckoutSubmit = (e) => {
+  const handleShippingContinue = (e) => {
     e.preventDefault();
-    setIsSubmitted(true);
+    setStep('payment');
+  };
+
+  const handlePlaceOrder = (e) => {
+    e.preventDefault();
+    // Task 3 will call POST /api/orders and POST /api/orders/:id/pay here.
+    setStep('confirmation');
   };
 
   if (loading) {
@@ -71,7 +79,7 @@ export default function Checkout({ token }) {
     );
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && step !== 'confirmation') {
     return (
       <div style={styles.pageContainer}>
         <div style={styles.wrapper}>
@@ -83,130 +91,217 @@ export default function Checkout({ token }) {
     );
   }
 
+  const orderSummary = (
+    <div style={styles.summarySection}>
+      <h3 style={styles.sectionTitle}>Order Summary</h3>
+      <div style={styles.itemList}>
+        {items.map((item) => (
+          <div key={item.product_id._id} style={styles.itemRow}>
+            <div>
+              <p style={styles.itemName}>{item.product_id.name}</p>
+              <p style={styles.itemQty}>Qty: {item.quantity}</p>
+            </div>
+            <p style={styles.itemPrice}>
+              {formatRands(item.product_id.price_cents * item.quantity)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <hr style={styles.divider} />
+
+      <div style={styles.summaryLine}>
+        <span>Subtotal</span>
+        <span>{formatRands(subtotalCents)}</span>
+      </div>
+      <div style={styles.summaryLine}>
+        <span>Shipping</span>
+        <span>{formatRands(shippingCents)}</span>
+      </div>
+      <div style={{ ...styles.summaryLine, fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' }}>
+        <span>Total</span>
+        <span>{formatRands(totalCents)}</span>
+      </div>
+    </div>
+  );
+
   return (
     <div style={styles.pageContainer}>
       <div style={styles.wrapper}>
         <h2 style={styles.headerTitle}>Secure Checkout</h2>
 
-        {isSubmitted ? (
+        <div style={styles.stepper}>
+          {STEPS.map((name, index) => {
+            const activeIndex = STEPS.indexOf(step);
+            const isActive = name === step;
+            const isDone = index < activeIndex;
+            return (
+              <div key={name} style={styles.stepItem}>
+                <div
+                  style={{
+                    ...styles.stepDot,
+                    backgroundColor: isActive || isDone ? '#2563eb' : '#d1d5db',
+                    color: isActive || isDone ? '#fff' : '#6b7280',
+                  }}
+                >
+                  {index + 1}
+                </div>
+                <span
+                  style={{
+                    ...styles.stepLabel,
+                    fontWeight: isActive ? '700' : '500',
+                    color: isActive ? '#111' : '#6b7280',
+                  }}
+                >
+                  {name.charAt(0).toUpperCase() + name.slice(1)}
+                </span>
+                {index < STEPS.length - 1 && <div style={styles.stepLine} />}
+              </div>
+            );
+          })}
+        </div>
+
+        {step === 'confirmation' ? (
           <div style={styles.successBox}>
-            <h3>Order Placed Successfully!</h3>
-            <p>Thank you for your purchase, {formData.fullName}. Your order is being processed.</p>
+            <h3>Ready for payment wiring</h3>
+            <p>
+              Shipping and payment details are collected. Task 3 will create the
+              order and run the mock payment here.
+            </p>
+            <p style={{ marginTop: '12px' }}>
+              <strong>{formData.fullName}</strong> · {formData.email}
+              <br />
+              {formData.address}, {formData.city}, {formData.postalCode}
+              <br />
+              Payment method: {formData.paymentMethod}
+            </p>
+            <button
+              type="button"
+              style={{ ...styles.secondaryButton, marginTop: '16px' }}
+              onClick={() => setStep('shipping')}
+            >
+              Back to shipping
+            </button>
           </div>
         ) : (
           <div style={styles.grid}>
-            <form onSubmit={handleCheckoutSubmit} style={styles.formSection}>
-              <h3 style={styles.sectionTitle}>Shipping & Payment Info</h3>
+            {step === 'shipping' && (
+              <form onSubmit={handleShippingContinue} style={styles.formSection}>
+                <h3 style={styles.sectionTitle}>Shipping</h3>
 
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>Full Name</label>
-                <input
-                  type="text"
-                  name="fullName"
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  style={styles.input}
-                  required
-                />
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>Email Address</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  style={styles.input}
-                  required
-                />
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>Street Address</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  style={styles.input}
-                  required
-                />
-              </div>
-
-              <div style={styles.row}>
-                <div style={styles.inputGroupHalf}>
-                  <label style={styles.label}>City</label>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Full Name</label>
                   <input
                     type="text"
-                    name="city"
-                    value={formData.city}
+                    name="fullName"
+                    value={formData.fullName}
                     onChange={handleChange}
                     style={styles.input}
                     required
                   />
                 </div>
-                <div style={styles.inputGroupHalf}>
-                  <label style={styles.label}>Postal Code</label>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Email Address</label>
                   <input
-                    type="text"
-                    name="postalCode"
-                    value={formData.postalCode}
+                    type="email"
+                    name="email"
+                    value={formData.email}
                     onChange={handleChange}
                     style={styles.input}
                     required
                   />
                 </div>
-              </div>
 
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>Card Details (Simulated)</label>
-                <input
-                  type="text"
-                  name="cardNumber"
-                  value={formData.cardNumber}
-                  onChange={handleChange}
-                  style={styles.input}
-                  required
-                />
-              </div>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Street Address</label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    style={styles.input}
+                    required
+                  />
+                </div>
 
-              <button type="submit" style={styles.payButton}>
-                Pay {formatRands(totalCents)}
-              </button>
-            </form>
-
-            <div style={styles.summarySection}>
-              <h3 style={styles.sectionTitle}>Order Summary</h3>
-              <div style={styles.itemList}>
-                {items.map((item) => (
-                  <div key={item.product_id._id} style={styles.itemRow}>
-                    <div>
-                      <p style={styles.itemName}>{item.product_id.name}</p>
-                      <p style={styles.itemQty}>Qty: {item.quantity}</p>
-                    </div>
-                    <p style={styles.itemPrice}>
-                      {formatRands(item.product_id.price_cents * item.quantity)}
-                    </p>
+                <div style={styles.row}>
+                  <div style={styles.inputGroupHalf}>
+                    <label style={styles.label}>City</label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      style={styles.input}
+                      required
+                    />
                   </div>
-                ))}
-              </div>
+                  <div style={styles.inputGroupHalf}>
+                    <label style={styles.label}>Postal Code</label>
+                    <input
+                      type="text"
+                      name="postalCode"
+                      value={formData.postalCode}
+                      onChange={handleChange}
+                      style={styles.input}
+                      required
+                    />
+                  </div>
+                </div>
 
-              <hr style={styles.divider} />
+                <button type="submit" style={styles.payButton}>
+                  Continue to payment
+                </button>
+              </form>
+            )}
 
-              <div style={styles.summaryLine}>
-                <span>Subtotal</span>
-                <span>{formatRands(subtotalCents)}</span>
-              </div>
-              <div style={styles.summaryLine}>
-                <span>Shipping</span>
-                <span>{formatRands(shippingCents)}</span>
-              </div>
-              <div style={{ ...styles.summaryLine, fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' }}>
-                <span>Total</span>
-                <span>{formatRands(totalCents)}</span>
-              </div>
-            </div>
+            {step === 'payment' && (
+              <form onSubmit={handlePlaceOrder} style={styles.formSection}>
+                <h3 style={styles.sectionTitle}>Payment</h3>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Payment method</label>
+                  <select
+                    name="paymentMethod"
+                    value={formData.paymentMethod}
+                    onChange={handleChange}
+                    style={styles.input}
+                    required
+                  >
+                    <option value="Stripe">Stripe (simulated)</option>
+                    <option value="PayPal">PayPal (simulated)</option>
+                  </select>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Card Details (Simulated)</label>
+                  <input
+                    type="text"
+                    name="cardNumber"
+                    value={formData.cardNumber}
+                    onChange={handleChange}
+                    style={styles.input}
+                    required
+                  />
+                </div>
+
+                <div style={styles.buttonRow}>
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={() => setStep('shipping')}
+                  >
+                    Back
+                  </button>
+                  <button type="submit" style={styles.payButton}>
+                    Place order · {formatRands(totalCents)}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {orderSummary}
           </div>
         )}
       </div>
@@ -230,11 +325,44 @@ const styles = {
     boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
   },
   headerTitle: {
-    marginBottom: '25px',
+    marginBottom: '20px',
     fontSize: '1.8rem',
     color: '#111',
     borderBottom: '2px solid #eee',
     paddingBottom: '10px',
+  },
+  stepper: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '28px',
+    gap: '8px',
+  },
+  stepItem: {
+    display: 'flex',
+    alignItems: 'center',
+    flex: 1,
+    gap: '8px',
+  },
+  stepDot: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  stepLabel: {
+    fontSize: '0.9rem',
+  },
+  stepLine: {
+    flex: 1,
+    height: '2px',
+    backgroundColor: '#e5e7eb',
+    marginLeft: '8px',
   },
   grid: {
     display: 'grid',
@@ -273,6 +401,11 @@ const styles = {
     display: 'flex',
     gap: '15px',
   },
+  buttonRow: {
+    display: 'flex',
+    gap: '12px',
+    marginTop: '8px',
+  },
   label: {
     fontSize: '0.85rem',
     fontWeight: '600',
@@ -285,7 +418,7 @@ const styles = {
     fontSize: '0.95rem',
   },
   payButton: {
-    marginTop: '15px',
+    marginTop: '8px',
     backgroundColor: '#2563eb',
     color: '#fff',
     border: 'none',
@@ -294,7 +427,18 @@ const styles = {
     fontSize: '1rem',
     fontWeight: 'bold',
     cursor: 'pointer',
-    transition: 'background 0.2s',
+    flex: 1,
+  },
+  secondaryButton: {
+    marginTop: '8px',
+    backgroundColor: '#fff',
+    color: '#374151',
+    border: '1px solid #d1d5db',
+    padding: '12px 16px',
+    borderRadius: '6px',
+    fontSize: '1rem',
+    fontWeight: '600',
+    cursor: 'pointer',
   },
   itemList: {
     display: 'flex',
