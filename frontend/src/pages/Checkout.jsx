@@ -197,33 +197,67 @@ export default function Checkout({ token }) {
 
         {step === 'confirmation' ? (
           <div style={styles.successBox}>
-            <h3>Order placed successfully</h3>
-            <p>Thank you, {formData.fullName}. Your payment was simulated and the order is paid.</p>
-            <p style={{ marginTop: '12px' }}>
-              <strong>Order ID:</strong> {completedOrder?._id}
-              <br />
-              <strong>Status:</strong> {completedOrder?.order_status}
-              <br />
-              <strong>Total:</strong>{' '}
-              {formatRands(completedOrder?.total_amount_cents ?? totalCents)}
-              <br />
-              <strong>Payment:</strong> {completedPayment?.payment_method} ·{' '}
-              {completedPayment?.transaction_id}
+            <h3>Order confirmed</h3>
+            <p>
+              Thank you, {completedOrder?.shipping_snapshot?.full_name || formData.fullName}.
+              Your mock payment completed and the order is marked paid.
             </p>
-            <p style={{ marginTop: '8px' }}>
-              {formData.address}, {formData.city}, {formData.postalCode}
-            </p>
-            <Link
-              to="/orders"
-              style={{
-                display: 'inline-block',
-                marginTop: '16px',
-                fontWeight: 'bold',
-                color: '#166534',
-              }}
-            >
-              View order history
-            </Link>
+
+            <div style={styles.confirmDetails}>
+              <div style={styles.confirmRow}>
+                <span>Order ID</span>
+                <strong>{completedOrder?._id}</strong>
+              </div>
+              <div style={styles.confirmRow}>
+                <span>Status</span>
+                <strong>{completedOrder?.order_status || 'Paid'}</strong>
+              </div>
+              <div style={styles.confirmRow}>
+                <span>Total paid</span>
+                <strong>
+                  {formatRands(
+                    completedPayment?.amount_cents ??
+                      completedOrder?.total_amount_cents ??
+                      totalCents,
+                  )}
+                </strong>
+              </div>
+              <div style={styles.confirmRow}>
+                <span>Payment</span>
+                <strong>
+                  {completedPayment?.payment_method || formData.paymentMethod}
+                  {completedPayment?.status ? ` · ${completedPayment.status}` : ''}
+                </strong>
+              </div>
+              <div style={styles.confirmRow}>
+                <span>Transaction</span>
+                <strong>{completedPayment?.transaction_id || '—'}</strong>
+              </div>
+            </div>
+
+            <div style={styles.confirmShipping}>
+              <p style={styles.confirmShippingTitle}>Shipping to</p>
+              <p style={{ margin: 0 }}>
+                {completedOrder?.shipping_snapshot?.full_name || formData.fullName}
+                <br />
+                {completedOrder?.shipping_snapshot?.email || formData.email}
+                <br />
+                {completedOrder?.shipping_snapshot?.street_address || formData.address}
+                <br />
+                {completedOrder?.shipping_snapshot?.city || formData.city}
+                {', '}
+                {completedOrder?.shipping_snapshot?.postal_code || formData.postalCode}
+              </p>
+            </div>
+
+            <div style={styles.confirmActions}>
+              <Link to="/orders" style={styles.confirmPrimaryLink}>
+                View order history
+              </Link>
+              <Link to="/cart" style={styles.confirmSecondaryLink}>
+                Back to cart
+              </Link>
+            </div>
           </div>
         ) : (
           <div style={styles.grid}>
@@ -536,11 +570,55 @@ const styles = {
     color: '#555',
   },
   successBox: {
-    textAlign: 'center',
-    padding: '40px',
+    textAlign: 'left',
+    padding: '32px',
     backgroundColor: '#f0fdf4',
     border: '1px solid #bbf7d0',
     borderRadius: '8px',
     color: '#166534',
+  },
+  confirmDetails: {
+    marginTop: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    backgroundColor: '#fff',
+    border: '1px solid #bbf7d0',
+    borderRadius: '8px',
+    padding: '16px',
+    color: '#14532d',
+  },
+  confirmRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '16px',
+    fontSize: '0.95rem',
+    wordBreak: 'break-all',
+  },
+  confirmShipping: {
+    marginTop: '16px',
+    fontSize: '0.95rem',
+    color: '#166534',
+  },
+  confirmShippingTitle: {
+    fontWeight: '700',
+    margin: '0 0 6px 0',
+  },
+  confirmActions: {
+    marginTop: '20px',
+    display: 'flex',
+    gap: '16px',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  confirmPrimaryLink: {
+    fontWeight: 'bold',
+    color: '#166534',
+    textDecoration: 'underline',
+  },
+  confirmSecondaryLink: {
+    fontWeight: '600',
+    color: '#3f6212',
+    textDecoration: 'none',
   },
 };

@@ -85,12 +85,13 @@ There is **no route at `/`** yet — the landing page shows only the temporary n
 
 - <http://localhost:5173/cart> — shopping cart (calls the backend)
 - <http://localhost:5173/wishlist> — wishlist (calls the backend)
-- <http://localhost:5173/checkout> — checkout page
+- <http://localhost:5173/checkout> — multi-step checkout (Shipping → Payment → Confirmation); creates an order and runs mock payment
 - <http://localhost:5173/orders> — order history (calls the backend)
 
+**Checkout flow:** add items to the cart → open `/checkout` → enter shipping → choose simulated Stripe/PayPal → Place order. Paste a fresh JWT into `frontend/src/App.jsx` `mockToken` first (see section 3).
+
 The API base URL is currently **hardcoded** as `http://localhost:5000` — in
-`frontend/src/api.js` for the cart and wishlist pages, and in
-`frontend/src/pages/OrderHistory.jsx` — so the backend must run on port 5000.
+`frontend/src/api.js` for cart, wishlist, checkout, and order history — so the backend must run on port 5000.
 
 Other frontend scripts: `npm run build`, `npm run preview`, `npm run lint`.
 
@@ -160,8 +161,6 @@ Things to be aware of when running this in its current state:
 - **Products cannot be browsed.** The product routes are placeholders, so the cart and wishlist
   pages ask you to paste a product id, and products must be inserted into MongoDB by hand.
   See [CARTWISHLIST.md](CARTWISHLIST.md) for a step-by-step walkthrough.
-- **Checkout is front-end only.** `frontend/src/pages/Checkout.jsx` uses hardcoded cart items and shows
-  a success message on submit; it never calls the backend. Only the Order History page talks to the API.
 - **No database seeding script**, so products/categories must be inserted manually to see real data.
 - **No test suite** in either app.
 - The token in `App.jsx` is a temporary placeholder for the login module (see section 3).
