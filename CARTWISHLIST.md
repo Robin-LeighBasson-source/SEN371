@@ -30,7 +30,7 @@ they work, and why each part was built the way it was.
 
 - `backend/server.js` — registered the two new routers.
 - `backend/models/Cart.js` and `backend/models/Wishlist.js` — added `unique: true` to `user_id`.
-- `frontend/src/App.jsx` — added the `/cart` and `/wishlist` routes and two nav links.
+- `frontend/src/App.jsx` — added the `/cart` and `/wishlist` routes; the header shows live bag and saved counts.
 
 The `Cart` and `Wishlist` **schemas were otherwise left exactly as they were**, because
 `orderController.createOrder` already reads the cart in that shape. Changing the schema
@@ -298,11 +298,9 @@ curl -X POST http://localhost:5000/api/cart \
 curl http://localhost:5000/api/cart -H "Authorization: Bearer $TOKEN"
 ```
 
-**4. Or use the pages** — start the frontend and open <http://localhost:5173/cart> or
-<http://localhost:5173/wishlist>, and paste the product id into the box at the top.
-
-Note that `App.jsx` still passes a hardcoded mock token to every page, so paste the `$TOKEN`
-value from step 1 into `mockToken` for the pages to load anything.
+**4. Or use the pages** — start the frontend, sign in at <http://localhost:5173/login>, and
+use the bag / heart buttons on any product card or product page. The bag lives at
+<http://localhost:5173/cart> and saved items at <http://localhost:5173/wishlist>.
 
 ### What was verified
 
@@ -318,10 +316,8 @@ cart and unsaves in one call; two different users cannot see each other's carts;
 
 ## 6. Known limitations
 
-- **Products cannot be browsed yet.** The product routes are placeholders, so both pages ask
-  for a product id to be pasted in. When the products module is finished, those two boxes
-  should be replaced by an "Add to cart" / "Save for later" button on a product card — the
-  API behind them does not need to change.
+- **Cart and wishlist state is loaded once per sign-in** (in `frontend/src/context/StoreContext.jsx`)
+  and updated from each API response, so two browser tabs can drift until one reloads.
 - **Stock is checked but not held.** Two shoppers can both put the last item in their cart.
   Reserving stock properly belongs with checkout and the orders module.
 - **The wishlist has no "move everything to cart" action.** It was left out because moving

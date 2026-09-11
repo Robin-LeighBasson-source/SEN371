@@ -1,35 +1,28 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { request } from '../api';
+import { useStore } from '../context/useStore';
+import { AlertIcon, ArrowRight } from '../components/Icons';
+import AuthLayout from './AuthLayout';
 
-export default function Login({ setToken }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+export default function Login() {
+  const { signIn } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
+  const from = location.state?.from || '/';
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
     setLoading(true);
-
     try {
-      const response = await fetch('http://localhost:5000/api/users/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to authenticate');
-      }
-
-      // Save token and update App state
-      localStorage.setItem('token', data.token);
-      setToken(data.token);
-      navigate('/'); 
+      const data = await request('/api/auth/login', null, { method: 'POST', body: JSON.stringify(form) });
+      signIn(data.token, data.user);
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -38,39 +31,25 @@ export default function Login({ setToken }) {
   };
 
   return (
-    <main className="brutalist-checkout" style={{ maxWidth: '500px', marginTop: '100px' }}>
-      <h2 className="brutalist-header" style={{ textAlign: 'center', fontSize: '24px' }}>LOG IN</h2>
-      
-      <form onSubmit={handleSubmit} style={{ marginTop: '40px' }}>
-        <label className="brutalist-label">EMAIL ADDRESS</label>
-        <input 
-          type="email" 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          className="brutalist-input" 
-          required 
-        />
-
-        <label className="brutalist-label">PASSWORD</label>
-        <input 
-          type="password" 
-          value={password} 
-          onChange={(e) => setPassword(e.target.value)} 
-          className="brutalist-input" 
-          style={{ textTransform: 'none' }} 
-          required 
-        />
-
-        {error && <p style={{ color: 'red', fontSize: '12px', marginBottom: '20px', textAlign: 'center' }}>{error}</p>}
-
-        <button type="submit" className="brutalist-btn" disabled={loading}>
-          {loading ? 'AUTHENTICATING...' : 'ENTER'}
+    <AuthLayout heading="Welcome back." blurb="Sign in to see your bag, saved items and order history.">
+      <span className="eyebrow">Sign in</span>
+      <h1>Good to see you</h1>
+      <p className="lead">Enter your details to continue.</p>
+      {error && <div className="alert alert-danger"><AlertIcon /> {error}</div>}
+      <form onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input id="email" type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" autoFocus />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input id="password" type="password" className="input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required autoComplete="current-password" />
+        </div>
+        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+          {loading ? 'Signing in…' : <>Sign in <ArrowRight /></>}
         </button>
       </form>
-
-      <div style={{ textAlign: 'center', marginTop: '30px' }}>
-        <Link to="/register" className="brutalist-link">CREATE AN ACCOUNT</Link>
-      </div>
-    </main>
+      <p className="auth-foot">New here? <Link to="/register" state={{ from }} className="link">Create an account</Link></p>
+    </AuthLayout>
   );
 }

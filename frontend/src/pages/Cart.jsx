@@ -1,122 +1,111 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { request, formatRands } from '../api';
+import { formatRands, primaryImage, productPath } from '../api';
+import { useStore } from '../context/useStore';
+import EmptyState from '../components/EmptyState';
+import Stepper from '../components/Stepper';
+import { ArrowRight, LockIcon, TrashIcon } from '../components/Icons';
+import { EmptyBagIllustration, ImagePlaceholder } from '../components/Illustrations';
+import { FREE_SHIPPING_CENTS, cartTotals } from '../totals';
 
-export default function Cart({ token }) {
-  const [cart, setCart] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [productId, setProductId] = useState('');
+export default function Cart() {
+  const { cart, refreshCart, updateCartItem, removeCartItem, clearCart, notify } = useStore();
+  const [loading, setLoading] = useState(!cart);
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState(null);
   const navigate = useNavigate();
 
-  const runRequest = useCallback(async (path, options) => {
-    try {
-      const data = await request(path, token, options);
-      setCart(data.cart);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
   useEffect(() => {
-    const loadCart = async () => await runRequest('/api/cart');
-    loadCart();
-  }, [runRequest]);
+    let active = true;
+    refreshCart()
+      .catch((err) => { if (active) setError(err.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [refreshCart]);
 
-  const handleAdd = (e) => {
-    e.preventDefault();
-    runRequest('/api/cart', {
-      method: 'POST',
-      body: JSON.stringify({ product_id: productId.trim(), quantity: 1 }),
-    });
-    setProductId('');
+  // Cart lines whose product was deleted come back with a null product_id.
+  const items = (cart?.items ?? []).filter((item) => item.product_id);
+  const { subtotal, shipping, total } = cartTotals(items);
+  const toFreeShipping = FREE_SHIPPING_CENTS - subtotal;
+
+  const run = async (id, action) => {
+    setBusyId(id);
+    setError('');
+    try { await action(); } catch (err) { setError(err.message); } finally { setBusyId(null); }
   };
 
-  const handleQuantityChange = (item, quantity) => {
-    if (quantity < 1) return;
-    runRequest(`/api/cart/items/${item.product_id._id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ quantity }),
-    });
-  };
-
-  const handleRemove = (item) => runRequest(`/api/cart/items/${item.product_id._id}`, { method: 'DELETE' });
-  const handleClear = () => runRequest('/api/cart', { method: 'DELETE' });
-
-  if (loading) return <main className="brutalist-checkout"><p>LOADING BAG...</p></main>;
-
-  const items = cart?.items ?? [];
-  const total = items.reduce((sum, item) => sum + item.product_id.price_cents * item.quantity, 0);
+  if (loading) return <main className="page container"><div className="loading-block"><span className="spinner" /> Loading your bag…</div></main>;
 
   return (
-    <main className="brutalist-checkout">
-      <div className="brutalist-top-bar">
-        <Link to="/products">{'<'}</Link>
-        <span>BAG</span>
+    <main className="page container">
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Your bag</span>
+          <h1 style={{ margin: 0 }}>Bag {items.length > 0 && <span className="muted" style={{ fontSize: '0.6em', fontWeight: 500 }}>({items.length} {items.length === 1 ? 'item' : 'items'})</span>}</h1>
+        </div>
+        {items.length > 0 && (
+          <button type="button" className="btn btn-danger btn-sm" onClick={() => run('clear', async () => { await clearCart(); notify('Your bag has been emptied', 'info'); })} disabled={busyId === 'clear'}>
+            <TrashIcon /> Empty bag
+          </button>
+        )}
       </div>
 
-      <h2 className="brutalist-header" style={{ fontSize: '24px', marginBottom: '40px' }}>YOUR BAG</h2>
-
-      {error && <p style={{ color: 'red', fontSize: '12px' }}>{error}</p>}
-
-      <form onSubmit={handleAdd} className="brutalist-row" style={{ marginBottom: '60px', alignItems: 'flex-start' }}>
-        <input 
-          type="text" 
-          value={productId} 
-          onChange={(e) => setProductId(e.target.value)} 
-          placeholder="PASTE A PRODUCT ID TO ADD" 
-          className="brutalist-input" 
-          style={{ marginBottom: 0 }}
-          required 
-        />
-        <button type="submit" className="brutalist-btn" style={{ marginTop: 0, width: 'auto', padding: '14px 40px' }}>
-          ADD
-        </button>
-      </form>
+      {error && <div className="alert alert-danger">{error}</div>}
 
       {items.length === 0 ? (
-        <p>YOUR BAG IS CURRENTLY EMPTY.</p>
+        <EmptyState
+          illustration={<EmptyBagIllustration />}
+          title="Your bag is empty"
+          actions={(<><Link to="/products" className="btn btn-primary">Start shopping <ArrowRight /></Link><Link to="/wishlist" className="btn btn-soft">View saved items</Link></>)}
+        >
+          Looks like you haven't added anything yet. Find something you'll love.
+        </EmptyState>
       ) : (
-        <div>
-          <div style={{ borderTop: '2px solid #000' }}>
-            {items.map((item) => (
-              <div key={item._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '30px 0', borderBottom: '1px solid #000' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>{item.product_id.name}</h3>
-                  <p style={{ margin: '0 0 20px 0', fontSize: '12px', color: '#666' }}>{formatRands(item.product_id.price_cents)} EACH</p>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', border: '1px solid #000', padding: '5px 10px' }}>
-                      <button type="button" onClick={() => handleQuantityChange(item, item.quantity - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>-</button>
-                      <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.quantity}</span>
-                      <button type="button" onClick={() => handleQuantityChange(item, item.quantity + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>+</button>
+        <div className="cart-layout">
+          <div className="cart-lines">
+            {items.map((item) => {
+              const product = item.product_id;
+              const image = primaryImage(product);
+              return (
+                <article key={item._id} className="card cart-line">
+                  <Link to={productPath(product)} className="thumb" aria-label={product.name}>
+                    {image ? <img src={image} alt="" /> : <ImagePlaceholder />}
+                  </Link>
+                  <div>
+                    <h3><Link to={productPath(product)}>{product.name}</Link></h3>
+                    <div className="line-meta">{formatRands(product.price_cents)} each</div>
+                    {product.stock_quantity !== undefined && item.quantity > product.stock_quantity && (
+                      <span className="badge badge-warn" style={{ marginTop: 6 }}>Only {product.stock_quantity} in stock</span>
+                    )}
+                    <div className="line-actions">
+                      <Stepper
+                        size="sm"
+                        value={item.quantity}
+                        max={Math.max(product.stock_quantity ?? 99, 1)}
+                        disabled={busyId === item._id}
+                        onChange={(quantity) => run(item._id, () => updateCartItem(product._id, quantity))}
+                      />
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => run(item._id, () => removeCartItem(product._id))} disabled={busyId === item._id}>
+                        <TrashIcon /> Remove
+                      </button>
                     </div>
-                    <button type="button" className="brutalist-link" style={{ margin: 0 }} onClick={() => handleRemove(item)}>REMOVE</button>
                   </div>
-                </div>
-                
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px' }}>
-                    {formatRands(item.product_id.price_cents * item.quantity)}
-                  </p>
-                </div>
-              </div>
-            ))}
+                  <div className="line-total"><span className="price">{formatRands(product.price_cents * item.quantity)}</span></div>
+                </article>
+              );
+            })}
+            <Link to="/products" className="link small" style={{ alignSelf: 'flex-start', marginTop: 6 }}>← Continue shopping</Link>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '40px' }}>
-            <button type="button" className="brutalist-link" onClick={handleClear}>CLEAR ENTIRE BAG</button>
-            <div style={{ textAlign: 'right', minWidth: '300px' }}>
-              <div className="brutalist-summary-line" style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '20px' }}>
-                <span>TOTAL</span>
-                <span>{formatRands(total)}</span>
-              </div>
-              <button className="brutalist-btn" onClick={() => navigate('/checkout')}>PROCEED TO CHECKOUT</button>
-            </div>
-          </div>
+          <aside className="panel summary" aria-label="Order summary">
+            <h3>Summary</h3>
+            <div className="summary-line"><span>Subtotal</span><span>{formatRands(subtotal)}</span></div>
+            <div className="summary-line"><span>Delivery</span><span>{shipping === 0 ? <span className="badge badge-success">Free</span> : formatRands(shipping)}</span></div>
+            {toFreeShipping > 0 && <p className="small muted" style={{ margin: '4px 0 0' }}>Add {formatRands(toFreeShipping)} more for free delivery.</p>}
+            <div className="summary-line total"><span>Total</span><span>{formatRands(total)}</span></div>
+            <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => navigate('/checkout')}>Checkout <ArrowRight /></button>
+            <div className="trust"><LockIcon /> Secure checkout · VAT included</div>
+          </aside>
         </div>
       )}
     </main>

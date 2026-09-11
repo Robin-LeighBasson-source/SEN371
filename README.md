@@ -107,8 +107,8 @@ npm run dev
 
 Vite prints a local URL, normally <http://localhost:5173>.
 
-The API base URL is **hardcoded** as `http://localhost:5000` (in `frontend/src/api.js`, and
-directly in `Login.jsx` / `Register.jsx`), so the backend must be running on port 5000.
+The API base URL defaults to `http://localhost:5000`. To point at a backend running elsewhere,
+create `frontend/.env` with `VITE_API_URL=http://host:port` (see `frontend/src/api.js`).
 
 Other frontend scripts: `npm run build`, `npm run preview`, `npm run lint`.
 
@@ -116,49 +116,69 @@ Other frontend scripts: `npm run build`, `npm run preview`, `npm run lint`.
 
 | Route              | What it does | Needs login? |
 |--------------------|--------------|--------------|
-| `/` and `/products`| Product catalog (reads `GET /api/products`) | no |
-| `/products/:sku`   | Product detail page with image carousel | no |
-| `/register`        | Create an account; stores the JWT in `localStorage` and redirects to `/` | – |
-| `/login`           | Sign in; stores the JWT in `localStorage` and redirects to `/` | – |
-| `/cart`            | Shopping cart. Currently asks you to paste a **product `_id`** to add an item | yes |
-| `/wishlist`        | Saved products; can move items to the cart | yes |
-| `/checkout`        | Shipping → Payment → Confirmation; creates an order and runs mock payment | yes |
-| `/orders`          | Order history | yes |
+| `/`                | Home — hero, category tiles, latest arrivals | no |
+| `/products`        | Catalog with search (`?search=`), category filter (`?category=<id>`), sort and pagination | no |
+| `/products/:sku`   | Product page — gallery, quantity, add to bag, save, related products | no (buttons prompt sign-in) |
+| `/register`        | Create an account; stores the JWT in `localStorage` and returns you to where you were | – |
+| `/login`           | Sign in; same behaviour | – |
+| `/cart`            | Bag — change quantities, remove lines, empty bag, go to checkout | yes |
+| `/wishlist`        | Saved items — move to bag or remove | yes |
+| `/checkout`        | Delivery → Payment → Review → confirmation. Creates the order and runs the mock payment | yes |
+| `/orders`          | Order history with status badges and delivery address | yes |
 
-The nav bar shows **LOGIN** when signed out and **LOGOUT** when signed in. Logging out only
-clears the token from `localStorage` — the token itself stays valid until it expires.
+Protected pages show an illustrated "Sign in to continue" panel instead of an error when you
+are signed out. Signing out only clears the token from `localStorage` — the token itself stays
+valid until it expires.
+
+### Frontend structure
+
+```
+frontend/src/
+├── api.js               fetch helpers, price formatting, image helpers
+├── brand.js             store name / tagline (change it in one place)
+├── totals.js            bag totals shared by the bag and checkout
+├── index.css            design system: tokens, components, layout, responsive rules
+├── context/             StoreProvider (auth, bag, wishlist, toasts) + useStore hook
+├── components/          Layout (header/footer), ProductCard, Illustrations (SVG), Icons, …
+└── pages/               Home, Products, ProductDetail, Cart, Wishlist, Checkout, OrderHistory, Login, Register, NotFound
+```
+
+All illustrations (hero, empty states, sign-in, 404, category and value-prop icons) are inline
+SVG components in `components/Illustrations.jsx`, so there are no image assets to manage.
 
 ---
 
 ## 3. Logging in
 
-You no longer need to paste a token anywhere. Open <http://localhost:5173/register>, create a
-user, and the app stores the JWT for you. All cart, wishlist, checkout and order calls send it as
-a `Bearer` header automatically.
+Open <http://localhost:5173/register>, create a user, and the app stores the JWT for you. All
+cart, wishlist, checkout and order calls send it as a `Bearer` header automatically.
 
 If you prefer the command line (e.g. for testing the API with `curl`):
 
 ```bash
 # Register (these are the endpoints the frontend uses)
-curl -X POST http://localhost:5000/api/users/register \
+curl -X POST http://localhost:5000/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123","first_name":"Test","last_name":"User"}'
 
 # ...or log an existing user in
-curl -X POST http://localhost:5000/api/users/login \
+curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123"}'
 ```
 
-Both return a JSON body containing `"token": "..."`. Use it on protected routes:
+Both return `{ "success": true, "token": "...", "user": {...} }`. Use the token on protected routes:
 
 ```bash
 curl http://localhost:5000/api/orders -H "Authorization: Bearer <token>"
 ```
 
-There is a second, equivalent set of auth routes under `/api/auth/*` (`register`, `login`, `me`,
-`logout`). They share the same user collection, so a user registered through either works with
-both. `/api/auth/register` additionally enforces a minimum password length of 8.
+Passwords must be at least 8 characters.
+
+> **Use `/api/auth/*`, not `/api/users/login|register`.** Both sets of routes exist and share
+> the same user collection, but the `/api/users/*` versions sign a token containing only `id`,
+> while the cart, wishlist and order controllers read `req.user._id`. A token from
+> `/api/users/login` therefore passes the auth check but silently fails to find the user's cart.
 
 ---
 
@@ -207,8 +227,8 @@ curl -X POST http://localhost:5000/api/products \
 Reload <http://localhost:5173> and the product appears. Repeat step 2 for as many products as
 you like (each `sku` must be unique).
 
-Either way, `GET /api/products` lists the products including each product's `_id`, which is
-what the cart and wishlist pages currently ask you to paste.
+Either way, `GET /api/products` lists the products and the catalog at
+<http://localhost:5173/products> shows them immediately.
 
 ---
 
@@ -219,14 +239,13 @@ All responses are JSON. Protected routes require `Authorization: Bearer <token>`
 | Method | Endpoint                | Auth | Notes |
 |--------|-------------------------|------|-------|
 | GET    | `/`                     | –    | Health check (`API is running...`) |
-| POST   | `/api/users/register`   | –    | Used by the frontend. Returns `{ _id, first_name, email, token }` |
-| POST   | `/api/users/login`      | –    | Used by the frontend. Same response shape |
+| POST   | `/api/auth/register`    | –    | Used by the frontend. Password ≥ 8 chars. Returns `{ success, token, user }` |
+| POST   | `/api/auth/login`       | –    | Used by the frontend. Same response shape |
+| GET    | `/api/auth/me`          | JWT  | Current user (used by the header) |
+| POST   | `/api/auth/logout`      | –    | Stub — returns success, token stays valid |
+| POST   | `/api/users/register`, `/api/users/login` | – | Legacy duplicates — token lacks `_id`, see section 3 |
 | GET    | `/api/users/me`         | JWT  | Current user |
 | GET/PUT/DELETE | `/api/users`, `/api/users/:id` | – | **Placeholder** — returns a message string |
-| POST   | `/api/auth/register`    | –    | Alternative register (password ≥ 8 chars). Returns `{ success, token, user }` |
-| POST   | `/api/auth/login`       | –    | Alternative login |
-| GET    | `/api/auth/me`          | JWT  | Current user |
-| POST   | `/api/auth/logout`      | –    | Stub — returns success, token stays valid |
 | GET    | `/api/products`         | –    | List. Query params: `search`, `category_id`, `page` (default 1), `limit` (default 12, max 100) |
 | POST   | `/api/products`         | –    | Create (see [Seeding data](#4-seeding-data) for the body) |
 | GET/PUT/DELETE | `/api/products/:sku` | – | Read / update / delete **by SKU**, not by id |
@@ -252,10 +271,12 @@ Things to be aware of when running this in its current state:
 
 - **Product and category write routes are unauthenticated** — anyone can create/edit/delete them.
 - **User CRUD routes** (`GET/PUT/DELETE /api/users/:id`) are placeholders.
-- **No "add to cart" button on the product pages yet** — the cart and wishlist pages ask you to
-  paste a product `_id` (get it from `GET /api/products`). See [CARTWISHLIST.md](CARTWISHLIST.md).
+- **Payment is simulated** — the checkout accepts any card details and `POST /api/orders/:id/pay`
+  just flips the status to `Paid`. Delivery is always free so the frontend total matches the
+  backend's `total_amount_cents`.
 - **No test suite** in either app.
-- **Two overlapping auth implementations** (`/api/users/*` and `/api/auth/*`).
+- **Two overlapping auth implementations** (`/api/users/*` and `/api/auth/*`); the `/api/users/*`
+  tokens don't work with cart/orders (see section 3).
 
 ---
 

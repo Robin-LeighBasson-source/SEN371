@@ -1,95 +1,113 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { request, formatRands } from '../api';
+import { formatRands } from '../api';
+import { useStore } from '../context/useStore';
+import EmptyState from '../components/EmptyState';
+import { ArrowRight } from '../components/Icons';
+import { EmptyOrdersIllustration } from '../components/Illustrations';
 
-const productLabel = (item) => {
-  if (item.product_id && typeof item.product_id === 'object' && item.product_id.name) return item.product_id.name;
-  return 'PRODUCT UNAVAILABLE';
+const STATUS = {
+  Pending: { badge: 'badge-warn', label: 'Awaiting payment' },
+  Paid: { badge: 'badge-success', label: 'Paid' },
+  Shipped: { badge: 'badge-info', label: 'Shipped' },
+  Cancelled: { badge: 'badge-danger', label: 'Cancelled' },
 };
 
-export default function OrderHistory({ token }) {
+const TIMELINE = ['Placed', 'Paid', 'Shipped'];
+
+const formatDate = (value) => (value
+  ? new Date(value).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+  : 'Unknown date');
+
+const productLabel = (item) => (item.product_id && typeof item.product_id === 'object' && item.product_id.name
+  ? item.product_id.name
+  : 'Product no longer available');
+
+function Timeline({ status }) {
+  if (status === 'Cancelled') return <div className="timeline"><span className="tl cancelled">Cancelled</span></div>;
+  const reached = status === 'Shipped' ? 3 : status === 'Paid' ? 2 : 1;
+  return (
+    <div className="timeline">
+      {TIMELINE.map((label, index) => <span key={label} className={`tl${index < reached ? ' done' : ''}`}>{label}</span>)}
+    </div>
+  );
+}
+
+export default function OrderHistory() {
+  const { authed } = useStore();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const data = await request('/api/orders', token);
-        setOrders(data.orders || []);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOrders();
-  }, [token]);
+    let active = true;
+    authed('/api/orders')
+      .then((data) => { if (active) setOrders(data.orders || []); })
+      .catch((err) => { if (active) setError(err.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [authed]);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'UNKNOWN DATE';
-    return new Date(dateString).toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
-  };
-
-  if (loading) return <main className="brutalist-checkout"><p>LOADING ORDERS...</p></main>;
-  if (error) return <main className="brutalist-checkout"><p style={{ color: 'red' }}>{error}</p></main>;
+  if (loading) return <main className="page container"><div className="loading-block"><span className="spinner" /> Loading your orders…</div></main>;
 
   return (
-    <main className="brutalist-checkout">
-      <div className="brutalist-top-bar">
-        <Link to="/products">{'<'}</Link>
-        <span>ORDER HISTORY</span>
+    <main className="page container">
+      <div className="page-head">
+        <div><span className="eyebrow">Account</span><h1 style={{ margin: 0 }}>Your orders</h1></div>
+        {orders.length > 0 && <p>{orders.length} {orders.length === 1 ? 'order' : 'orders'}</p>}
       </div>
 
-      <h2 className="brutalist-header" style={{ fontSize: '24px', marginBottom: '40px' }}>PAST ORDERS</h2>
+      {error && <div className="alert alert-danger">{error}</div>}
 
-      {orders.length === 0 ? (
-        <div style={{ textAlign: 'center', marginTop: '60px' }}>
-          <p>YOU HAVE NO PAST ORDERS.</p>
-          <Link to="/products"><button className="brutalist-btn" style={{ maxWidth: '300px' }}>START SHOPPING</button></Link>
-        </div>
+      {orders.length === 0 && !error ? (
+        <EmptyState
+          illustration={<EmptyOrdersIllustration />}
+          title="No orders yet"
+          actions={<Link to="/products" className="btn btn-primary">Start shopping <ArrowRight /></Link>}
+        >
+          When you place an order it will show up here with its status and delivery details.
+        </EmptyState>
       ) : (
-        <div style={{ borderTop: '2px solid #000' }}>
-          {orders.map((order) => (
-            <div key={order._id} style={{ padding: '40px 0', borderBottom: '1px solid #000' }}>
-              <div className="brutalist-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
+        orders.map((order) => {
+          const status = STATUS[order.order_status] || STATUS.Pending;
+          const itemCount = (order.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
+          return (
+            <article key={order._id} className="card order-card">
+              <header className="order-head">
+                <div className="meta">
+                  <div><span>Order</span><b>#{order._id.slice(-8).toUpperCase()}</b></div>
+                  <div><span>Placed</span><b>{formatDate(order.created_at || order.createdAt)}</b></div>
+                  <div><span>Items</span><b>{itemCount}</b></div>
+                  <div><span>Total</span><b>{formatRands(order.total_amount_cents)}</b></div>
+                </div>
+                <span className={`badge badge-dot ${status.badge}`}>{status.label}</span>
+              </header>
+              <div className="order-body">
                 <div>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>ORDER #{order._id}</h3>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>DATE: {formatDate(order.created_at || order.createdAt)}</p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold' }}>STATUS: {order.order_status?.toUpperCase() || 'PENDING'}</p>
-                  <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>{formatRands(order.total_amount_cents || 0)}</p>
-                </div>
-              </div>
-
-              <div className="brutalist-row" style={{ gap: '60px' }}>
-                <div className="brutalist-col">
-                  <h4 className="brutalist-header" style={{ margin: '0 0 15px 0' }}>ITEMS</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {(order.items || []).map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                        <span><strong style={{ opacity: 0.5, marginRight: '10px' }}>{item.quantity}X</strong>{productLabel(item)}</span>
-                        <strong>{formatRands((item.price_at_purchase_cents || 0) * (item.quantity || 0))}</strong>
-                      </div>
+                  <ul className="order-items">
+                    {(order.items || []).map((item, index) => (
+                      <li key={index}>
+                        <span><span className="q">{item.quantity}×</span>{productLabel(item)}</span>
+                        <b>{formatRands((item.price_at_purchase_cents || 0) * (item.quantity || 0))}</b>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
+                  <Timeline status={order.order_status} />
                 </div>
-
-                {order.shipping_snapshot && (
-                  <div className="brutalist-col">
-                    <h4 className="brutalist-header" style={{ margin: '0 0 15px 0' }}>SHIPPING</h4>
-                    <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.6, color: '#444' }}>
-                      {order.shipping_snapshot.full_name?.toUpperCase()}<br />
-                      {order.shipping_snapshot.street_address?.toUpperCase()}<br />
-                      {order.shipping_snapshot.city?.toUpperCase()}, {order.shipping_snapshot.postal_code}
+                <div className="order-ship">
+                  <h4>Delivery address</h4>
+                  {order.shipping_snapshot ? (
+                    <p style={{ margin: 0, lineHeight: 1.6 }}>
+                      {order.shipping_snapshot.full_name}<br />
+                      {order.shipping_snapshot.street_address}<br />
+                      {order.shipping_snapshot.city} {order.shipping_snapshot.postal_code}
                     </p>
-                  </div>
-                )}
+                  ) : <p className="muted" style={{ margin: 0 }}>No address on record.</p>}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            </article>
+          );
+        })
       )}
     </main>
   );

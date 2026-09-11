@@ -1,107 +1,74 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { request, formatRands } from '../api';
+import { formatRands, primaryImage, productPath } from '../api';
+import { useStore } from '../context/useStore';
+import EmptyState from '../components/EmptyState';
+import { ArrowRight, BagIcon, TrashIcon } from '../components/Icons';
+import { EmptyWishlistIllustration, ImagePlaceholder } from '../components/Illustrations';
 
-export default function Wishlist({ token }) {
-  const [wishlist, setWishlist] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
-  const [productId, setProductId] = useState('');
-
-  const runRequest = useCallback(async (path, options) => {
-    try {
-      const data = await request(path, token, options);
-      setWishlist(data.wishlist);
-      setError(null);
-      return data;
-    } catch (err) {
-      setError(err.message);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    const loadWishlist = async () => await runRequest('/api/wishlist');
-    loadWishlist();
-  }, [runRequest]);
-
-  const handleAdd = (e) => {
-    e.preventDefault();
-    setMessage(null);
-    runRequest('/api/wishlist', { method: 'POST', body: JSON.stringify({ product_id: productId.trim() }) });
-    setProductId('');
-  };
-
-  const handleRemove = (product) => {
-    setMessage(null);
-    runRequest(`/api/wishlist/items/${product._id}`, { method: 'DELETE' });
-  };
-
-  const handleMoveToCart = async (product) => {
-    setMessage(null);
-    const data = await runRequest(`/api/wishlist/items/${product._id}/move-to-cart`, { method: 'POST' });
-    if (data) setMessage(`"${product.name}" MOVED TO BAG.`);
-  };
-
-  if (loading) return <main className="brutalist-checkout"><p>LOADING SAVED ITEMS...</p></main>;
+export default function Wishlist() {
+  const { wishlist, removeFromWishlist, moveToCart } = useStore();
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
   const products = wishlist?.products ?? [];
 
+  const run = async (id, action) => {
+    setBusyId(id);
+    setError('');
+    try { await action(); } catch (err) { setError(err.message); } finally { setBusyId(null); }
+  };
+
+  if (!wishlist) return <main className="page container"><div className="loading-block"><span className="spinner" /> Loading saved items…</div></main>;
+
   return (
-    <main className="brutalist-checkout">
-      <div className="brutalist-top-bar">
-        <Link to="/products">{'<'}</Link>
-        <span>SAVED</span>
+    <main className="page container">
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Wishlist</span>
+          <h1 style={{ margin: 0 }}>Saved for later</h1>
+        </div>
+        {products.length > 0 && <p>{products.length} {products.length === 1 ? 'item' : 'items'}</p>}
       </div>
 
-      <h2 className="brutalist-header" style={{ fontSize: '24px', marginBottom: '20px' }}>SAVED FOR LATER</h2>
-
-      {error && <p style={{ color: 'red', fontSize: '12px' }}>{error}</p>}
-      {message && <p style={{ color: '#000', fontWeight: 'bold', fontSize: '12px', marginBottom: '20px' }}>{message}</p>}
-
-      <form onSubmit={handleAdd} className="brutalist-row" style={{ marginBottom: '60px', alignItems: 'flex-start' }}>
-        <input 
-          type="text" 
-          value={productId} 
-          onChange={(e) => setProductId(e.target.value)} 
-          placeholder="PASTE A PRODUCT ID TO SAVE IT" 
-          className="brutalist-input" 
-          style={{ marginBottom: 0 }}
-          required 
-        />
-        <button type="submit" className="brutalist-btn" style={{ marginTop: 0, width: 'auto', padding: '14px 40px' }}>
-          SAVE
-        </button>
-      </form>
+      {error && <div className="alert alert-danger">{error}</div>}
 
       {products.length === 0 ? (
-        <p>YOU HAVE NOT SAVED ANY PRODUCTS YET.</p>
+        <EmptyState
+          illustration={<EmptyWishlistIllustration />}
+          title="Nothing saved yet"
+          actions={<Link to="/products" className="btn btn-primary">Browse the catalog <ArrowRight /></Link>}
+        >
+          Tap the heart on any product to keep it here for later.
+        </EmptyState>
       ) : (
-        <div style={{ borderTop: '2px solid #000' }}>
-          {products.map((product) => (
-            <div key={product._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '30px 0', borderBottom: '1px solid #000' }}>
-              <div>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>{product.name}</h3>
-                <p style={{ margin: 0, fontSize: '12px', fontWeight: 'bold' }}>{formatRands(product.price_cents)}</p>
-                {product.stock_quantity === 0 && <p style={{ color: 'red', fontSize: '11px', marginTop: '10px' }}>OUT OF STOCK</p>}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-                <button type="button" className="brutalist-link" style={{ margin: 0 }} onClick={() => handleRemove(product)}>REMOVE</button>
-                <button 
-                  type="button" 
-                  className="brutalist-btn" 
-                  style={{ margin: 0, width: 'auto', padding: '10px 30px' }} 
-                  onClick={() => handleMoveToCart(product)} 
-                  disabled={product.stock_quantity === 0}
-                >
-                  MOVE TO BAG
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="cart-lines">
+          {products.map((product) => {
+            const image = primaryImage(product);
+            const inStock = product.stock_quantity > 0;
+            return (
+              <article key={product._id} className="card cart-line">
+                <Link to={productPath(product)} className="thumb" aria-label={product.name}>
+                  {image ? <img src={image} alt="" /> : <ImagePlaceholder />}
+                </Link>
+                <div>
+                  <h3><Link to={productPath(product)}>{product.name}</Link></h3>
+                  <div className="row wrap" style={{ gap: 8 }}>
+                    <span className="price" style={{ fontSize: 15 }}>{formatRands(product.price_cents)}</span>
+                    {inStock ? <span className="badge badge-success">In stock</span> : <span className="badge badge-danger">Sold out</span>}
+                  </div>
+                  <div className="line-actions">
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => run(product._id, () => moveToCart(product))} disabled={!inStock || busyId === product._id}>
+                      <BagIcon /> Move to bag
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => run(product._id, () => removeFromWishlist(product))} disabled={busyId === product._id}>
+                      <TrashIcon /> Remove
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </main>
