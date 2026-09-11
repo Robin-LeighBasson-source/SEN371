@@ -1,36 +1,68 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, NavLink, Link, Navigate } from 'react-router-dom';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import OrderHistory from './pages/OrderHistory';
 import Wishlist from './pages/Wishlist';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import './pages/ProductCatalog.css'; 
 
 export default function App() {
-  // We will pass a temporary mock token just to render the UI. 
-  // You will replace this later with the actual token from your group's login module.
- const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTlmMWEzNzZkMDRhNjg3NWY1OTc3NzkiLCJpZCI6IjZhOWYxYTM3NmQwNGE2ODc1ZjU5Nzc3OSIsInJvbGUiOiJjdXN0b21lciIsImlhdCI6MTc4ODgxMTgzMSwiZXhwIjoxNzg5NDE2NjMxfQ.hctUksgB44CYxdn1XGMZzdvSThU7zGuSCeAACzV1ASA";;
+  // Ensure we don't accidentally load the string "null" from local storage
+  const [token, setToken] = useState(() => {
+    const savedToken = localStorage.getItem('token');
+    return (savedToken && savedToken !== 'null') ? savedToken : null;
+  });
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+  };
 
   return (
     <BrowserRouter>
-      <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-        {/* Temporary Navigation Bar to help you click between pages */}
-        <nav style={{ marginBottom: '20px', padding: '10px', background: '#eee', borderRadius: '5px' }}>
-          <Link to="/products" style={{ marginRight: '15px', fontWeight: 'bold' }}>Products</Link>
-          <Link to="/cart" style={{ marginRight: '15px', fontWeight: 'bold' }}>My Cart</Link>
-          <Link to="/wishlist" style={{ marginRight: '15px', fontWeight: 'bold' }}>My Wishlist</Link>
-          <Link to="/checkout" style={{ marginRight: '15px', fontWeight: 'bold' }}>Go to Checkout</Link>
-          <Link to="/orders" style={{ fontWeight: 'bold' }}>View Order History</Link>
+      <div>
+        <nav className="global-nav">
+          <div className="nav-left">
+            <Link to="/" style={{ fontSize: '24px' }}>+</Link>
+          </div>
+          
+          <div className="nav-center">
+            <NavLink to="/products" className={({ isActive }) => isActive ? "active" : ""}>CATALOG</NavLink>
+            <NavLink to="/orders" className={({ isActive }) => isActive ? "active" : ""}>ORDERS</NavLink>
+            <NavLink to="/wishlist" className={({ isActive }) => isActive ? "active" : ""}>SAVED</NavLink>
+          </div>
+
+          <div className="nav-right" style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+            {token ? (
+              <button 
+                onClick={handleLogout} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11px', textTransform: 'uppercase', color: '#000' }}
+              >
+                LOGOUT
+              </button>
+            ) : (
+              <Link to="/login" style={{ fontSize: '11px', textDecoration: 'none', color: '#000' }}>LOGIN</Link>
+            )}
+            <Link to="/cart" style={{ fontSize: '11px', textDecoration: 'none', color: '#000' }}>BAG</Link>
+          </div>
         </nav>
 
         <Routes>
           <Route path="/" element={<Products />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/:sku" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart token={mockToken} />} />
-          <Route path="/wishlist" element={<Wishlist token={mockToken} />} />
-          <Route path="/checkout" element={<Checkout token={mockToken} />} />
-          <Route path="/orders" element={<OrderHistory token={mockToken} />} />
+          
+          <Route path="/login" element={<Login setToken={setToken} />} />
+          <Route path="/register" element={<Register setToken={setToken} />} />
+
+          <Route path="/cart" element={<Cart token={token} />} />
+          <Route path="/wishlist" element={<Wishlist token={token} />} />
+          <Route path="/checkout" element={<Checkout token={token} />} />
+          <Route path="/orders" element={<OrderHistory token={token} />} />
         </Routes>
       </div>
     </BrowserRouter>

@@ -2,26 +2,28 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { request, formatRands } from '../api';
 
-const STEPS = ['shipping', 'payment', 'confirmation'];
-
 export default function Checkout({ token }) {
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [step, setStep] = useState('shipping');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [completedOrder, setCompletedOrder] = useState(null);
-  const [completedPayment, setCompletedPayment] = useState(null);
 
   const [formData, setFormData] = useState({
-    fullName: '',
     email: '',
+    subscribe: true,
     address: '',
+    apartment: '',
     city: '',
+    state: '',
     postalCode: '',
-    cardNumber: '4242 •••• •••• 4242',
-    paymentMethod: 'Stripe',
+    country: 'SOUTH AFRICA',
+    cardName: '',
+    cardNumber: '',
+    expMonth: '',
+    expYear: '',
+    cvc: ''
   });
 
   useEffect(() => {
@@ -29,63 +31,50 @@ export default function Checkout({ token }) {
       try {
         const data = await request('/api/cart', token);
         setCart(data.cart);
-        setError(null);
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-
     loadCart();
   }, [token]);
 
   const items = cart?.items ?? [];
-  const subtotalCents = items.reduce(
-    (sum, item) => sum + (item.product_id?.price_cents ?? 0) * item.quantity,
-    0,
-  );
-  const shippingCents = items.length > 0 ? 10000 : 0;
+  const subtotalCents = items.reduce((sum, item) => sum + (item.product_id?.price_cents ?? 0) * item.quantity, 0);
+  const shippingCents = items.length > 0 ? 0 : 0; // Assuming free shipping for this aesthetic
   const totalCents = subtotalCents + shippingCents;
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleShippingContinue = (e) => {
-    e.preventDefault();
-    setSubmitError(null);
-    setStep('payment');
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setFormData({ ...formData, [e.target.name]: value });
   };
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
-
     try {
       const orderResult = await request('/api/orders', token, {
         method: 'POST',
         body: JSON.stringify({
-          shipping: {
-            full_name: formData.fullName,
-            email: formData.email,
-            street_address: formData.address,
-            city: formData.city,
-            postal_code: formData.postalCode,
+          shipping: { 
+            full_name: formData.cardName || 'Customer', 
+            email: formData.email, 
+            street_address: `${formData.address} ${formData.apartment}`.trim(), 
+            city: formData.city, 
+            postal_code: formData.postalCode 
           },
         }),
       });
-
-      const payResult = await request(`/api/orders/${orderResult.order._id}/pay`, token, {
-        method: 'POST',
-        body: JSON.stringify({ payment_method: formData.paymentMethod }),
+      
+      // Process mock payment
+      await request(`/api/orders/${orderResult.order._id}/pay`, token, {
+        method: 'POST', body: JSON.stringify({ payment_method: 'Credit Card' }),
       });
-
-      setCompletedOrder(payResult.order || orderResult.order);
-      setCompletedPayment(payResult.payment);
+      
+      setCompletedOrder(orderResult.order);
       setCart({ ...(cart || {}), items: [] });
-      setStep('confirmation');
     } catch (err) {
       setSubmitError(err.message);
     } finally {
@@ -93,532 +82,169 @@ export default function Checkout({ token }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={styles.pageContainer}>
-        <h2>Loading checkout...</h2>
-      </div>
-    );
-  }
+  if (loading) return <main className="brutalist-checkout"><p>LOADING...</p></main>;
 
-  if (error) {
+  if (completedOrder) {
     return (
-      <div style={styles.pageContainer}>
-        <div style={styles.wrapper}>
-          <h2 style={styles.headerTitle}>Secure Checkout</h2>
-          <p style={{ color: 'red' }}>{error}</p>
-          <Link to="/cart">Back to cart</Link>
+      <main className="brutalist-checkout">
+        <div className="brutalist-top-bar">
+          <Link to="/products">{'<'}</Link>
+          <Link to="/cart">BAG</Link>
         </div>
-      </div>
-    );
-  }
-
-  if (items.length === 0 && step !== 'confirmation') {
-    return (
-      <div style={styles.pageContainer}>
-        <div style={styles.wrapper}>
-          <h2 style={styles.headerTitle}>Secure Checkout</h2>
-          <p>Your cart is empty. Add items before checking out.</p>
-          <Link to="/cart" style={{ fontWeight: 'bold' }}>Go to cart</Link>
+        <div style={{ textAlign: 'center', marginTop: '100px' }}>
+          <h2 style={{ fontSize: '18px' }}>SUCCESS!</h2>
+          <p style={{ color: '#666', marginTop: '20px' }}>ORDER #{completedOrder._id} CONFIRMED.</p>
+          <Link to="/orders"><button className="brutalist-btn" style={{ maxWidth: '300px', marginTop: '40px' }}>VIEW ORDERS</button></Link>
         </div>
-      </div>
+      </main>
     );
   }
-
-  const orderSummary = (
-    <div style={styles.summarySection}>
-      <h3 style={styles.sectionTitle}>Order Summary</h3>
-      <div style={styles.itemList}>
-        {items.map((item) => (
-          <div key={item.product_id._id} style={styles.itemRow}>
-            <div>
-              <p style={styles.itemName}>{item.product_id.name}</p>
-              <p style={styles.itemQty}>Qty: {item.quantity}</p>
-            </div>
-            <p style={styles.itemPrice}>
-              {formatRands(item.product_id.price_cents * item.quantity)}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <hr style={styles.divider} />
-
-      <div style={styles.summaryLine}>
-        <span>Subtotal</span>
-        <span>{formatRands(subtotalCents)}</span>
-      </div>
-      <div style={styles.summaryLine}>
-        <span>Shipping</span>
-        <span>{formatRands(shippingCents)}</span>
-      </div>
-      <div style={{ ...styles.summaryLine, fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' }}>
-        <span>Total</span>
-        <span>{formatRands(totalCents)}</span>
-      </div>
-    </div>
-  );
 
   return (
-    <div style={styles.pageContainer}>
-      <div style={styles.wrapper}>
-        <h2 style={styles.headerTitle}>Secure Checkout</h2>
+    <main className="brutalist-checkout">
+      <div className="brutalist-top-bar">
+        <Link to="/cart">{'<'}</Link>
+        <Link to="/cart">BAG</Link>
+      </div>
 
-        <div style={styles.stepper}>
-          {STEPS.map((name, index) => {
-            const activeIndex = STEPS.indexOf(step);
-            const isActive = name === step;
-            const isDone = index < activeIndex;
-            return (
-              <div key={name} style={styles.stepItem}>
-                <div
-                  style={{
-                    ...styles.stepDot,
-                    backgroundColor: isActive || isDone ? '#2563eb' : '#d1d5db',
-                    color: isActive || isDone ? '#fff' : '#6b7280',
-                  }}
-                >
-                  {index + 1}
-                </div>
-                <span
-                  style={{
-                    ...styles.stepLabel,
-                    fontWeight: isActive ? '700' : '500',
-                    color: isActive ? '#111' : '#6b7280',
-                  }}
-                >
-                  {name.charAt(0).toUpperCase() + name.slice(1)}
-                </span>
-                {index < STEPS.length - 1 && <div style={styles.stepLine} />}
+      <div className="brutalist-grid">
+        {/* LEFT COLUMN: FORM */}
+        <div>
+          <form onSubmit={handlePlaceOrder}>
+            
+            <h2 className="brutalist-header">CONTACT INFORMATION</h2>
+            <label className="brutalist-label">EMAIL ADDRESS</label>
+            <input type="email" name="email" value={formData.email} onChange={handleChange} className="brutalist-input" required />
+            
+            <div className="brutalist-checkbox-wrapper">
+              <input type="checkbox" name="subscribe" checked={formData.subscribe} onChange={handleChange} className="brutalist-checkbox" />
+              <span>SUBSCRIBE TO UPDATES AND NOTIFICATIONS</span>
+            </div>
+
+            <h2 className="brutalist-header">BILLING ADDRESS</h2>
+            <label className="brutalist-label">ADDRESS</label>
+            <input type="text" name="address" value={formData.address} onChange={handleChange} placeholder="START TYPING YOUR ADDRESS..." className="brutalist-input" required />
+            
+            <label className="brutalist-label">APARTMENT, SUITE, UNIT, ETC. (OPTIONAL)</label>
+            <input type="text" name="apartment" value={formData.apartment} onChange={handleChange} placeholder="APARTMENT, SUITE, UNIT, FLOOR, ETC." className="brutalist-input" />
+            
+            <div className="brutalist-row">
+              <div className="brutalist-col">
+                <label className="brutalist-label">CITY</label>
+                <input type="text" name="city" value={formData.city} onChange={handleChange} className="brutalist-input" required />
               </div>
-            );
-          })}
+              <div className="brutalist-col">
+                <label className="brutalist-label">STATE / PROVINCE</label>
+                <input type="text" name="state" value={formData.state} onChange={handleChange} className="brutalist-input" required />
+              </div>
+            </div>
+
+            <div className="brutalist-row">
+              <div className="brutalist-col">
+                <label className="brutalist-label">ZIP / POSTAL CODE</label>
+                <input type="text" name="postalCode" value={formData.postalCode} onChange={handleChange} className="brutalist-input" required />
+              </div>
+              <div className="brutalist-col">
+                <label className="brutalist-label">COUNTRY</label>
+                <input type="text" name="country" value={formData.country} onChange={handleChange} className="brutalist-input" readOnly />
+              </div>
+            </div>
+
+            <h2 className="brutalist-header">PAYMENT DETAILS</h2>
+            
+            <div className="brutalist-card-selector">
+              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                <div style={{ width: '30px', height: '20px', background: '#000', borderRadius: '2px' }}></div>
+                <div className="brutalist-card-info">
+                  <h4>CREDIT / DEBIT CARD</h4>
+                  <p>Visa, Mastercard, Amex, Discover</p>
+                </div>
+              </div>
+              <div className="brutalist-checkbox" style={{ background: '#000' }}><span style={{ color: '#fff', position: 'absolute', left: '3px', top: '-1px', fontSize: '12px' }}>✓</span></div>
+            </div>
+
+            <label className="brutalist-label">CARDHOLDER NAME</label>
+            <input type="text" name="cardName" value={formData.cardName} onChange={handleChange} placeholder="FULL NAME ON CARD" className="brutalist-input" required />
+
+            <label className="brutalist-label">CARD NUMBER</label>
+            <input type="text" name="cardNumber" value={formData.cardNumber} onChange={handleChange} placeholder="1234 5678 9012 3456" className="brutalist-input" required maxLength="19" />
+
+            <div className="brutalist-row">
+              <div className="brutalist-col">
+                <label className="brutalist-label">EXP MONTH</label>
+                <select name="expMonth" value={formData.expMonth} onChange={handleChange} className="brutalist-input brutalist-select" required>
+                  <option value="" disabled>MM</option>
+                  {[...Array(12)].map((_, i) => <option key={i} value={i+1}>{String(i+1).padStart(2, '0')}</option>)}
+                </select>
+              </div>
+              <div className="brutalist-col">
+                <label className="brutalist-label">EXP YEAR</label>
+                <select name="expYear" value={formData.expYear} onChange={handleChange} className="brutalist-input brutalist-select" required>
+                  <option value="" disabled>YYYY</option>
+                  {[...Array(10)].map((_, i) => {
+                    const year = new Date().getFullYear() + i;
+                    return <option key={year} value={year}>{year}</option>
+                  })}
+                </select>
+              </div>
+              <div className="brutalist-col">
+                <label className="brutalist-label">SECURITY CODE</label>
+                <input type="text" name="cvc" value={formData.cvc} onChange={handleChange} placeholder="CVC" className="brutalist-input" required maxLength="4" />
+              </div>
+            </div>
+
+            <div className="brutalist-secure-note">
+              <span>🔒</span>
+              <span>SECURE PAYMENT<br/><span style={{ color: '#aaa' }}>All transactions are encrypted and secure</span></span>
+            </div>
+
+            {submitError && <p style={{ color: 'red', fontSize: '12px' }}>{submitError}</p>}
+            
+            <button type="submit" className="brutalist-btn" disabled={submitting || items.length === 0}>
+              {submitting ? 'PROCESSING...' : 'PLACE ORDER'}
+            </button>
+
+          </form>
         </div>
 
-        {step === 'confirmation' ? (
-          <div style={styles.successBox}>
-            <h3>Order confirmed</h3>
-            <p>
-              Thank you, {completedOrder?.shipping_snapshot?.full_name || formData.fullName}.
-              Your mock payment completed and the order is marked paid.
-            </p>
-
-            <div style={styles.confirmDetails}>
-              <div style={styles.confirmRow}>
-                <span>Order ID</span>
-                <strong>{completedOrder?._id}</strong>
-              </div>
-              <div style={styles.confirmRow}>
-                <span>Status</span>
-                <strong>{completedOrder?.order_status || 'Paid'}</strong>
-              </div>
-              <div style={styles.confirmRow}>
-                <span>Total paid</span>
-                <strong>
-                  {formatRands(
-                    completedPayment?.amount_cents ??
-                      completedOrder?.total_amount_cents ??
-                      totalCents,
-                  )}
-                </strong>
-              </div>
-              <div style={styles.confirmRow}>
-                <span>Payment</span>
-                <strong>
-                  {completedPayment?.payment_method || formData.paymentMethod}
-                  {completedPayment?.status ? ` · ${completedPayment.status}` : ''}
-                </strong>
-              </div>
-              <div style={styles.confirmRow}>
-                <span>Transaction</span>
-                <strong>{completedPayment?.transaction_id || '—'}</strong>
-              </div>
-            </div>
-
-            <div style={styles.confirmShipping}>
-              <p style={styles.confirmShippingTitle}>Shipping to</p>
-              <p style={{ margin: 0 }}>
-                {completedOrder?.shipping_snapshot?.full_name || formData.fullName}
-                <br />
-                {completedOrder?.shipping_snapshot?.email || formData.email}
-                <br />
-                {completedOrder?.shipping_snapshot?.street_address || formData.address}
-                <br />
-                {completedOrder?.shipping_snapshot?.city || formData.city}
-                {', '}
-                {completedOrder?.shipping_snapshot?.postal_code || formData.postalCode}
-              </p>
-            </div>
-
-            <div style={styles.confirmActions}>
-              <Link to="/orders" style={styles.confirmPrimaryLink}>
-                View order history
-              </Link>
-              <Link to="/cart" style={styles.confirmSecondaryLink}>
-                Back to cart
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div style={styles.grid}>
-            {step === 'shipping' && (
-              <form onSubmit={handleShippingContinue} style={styles.formSection}>
-                <h3 style={styles.sectionTitle}>Shipping</h3>
-
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Full Name</label>
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Email Address</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Street Address</label>
-                  <input
-                    type="text"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-
-                <div style={styles.row}>
-                  <div style={styles.inputGroupHalf}>
-                    <label style={styles.label}>City</label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      style={styles.input}
-                      required
-                    />
+        {/* RIGHT COLUMN: ORDER SUMMARY */}
+        <div style={{ position: 'sticky', top: '40px' }}>
+          <h2 className="brutalist-header">ORDER SUMMARY</h2>
+          
+          <div className="brutalist-summary-items">
+            {items.length === 0 ? (
+              <p>YOUR CART IS EMPTY</p>
+            ) : (
+              <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {items.map((item) => (
+                  <div key={item.product_id._id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{item.quantity}x {item.product_id.name}</span>
+                    <span>{formatRands(item.product_id.price_cents * item.quantity)}</span>
                   </div>
-                  <div style={styles.inputGroupHalf}>
-                    <label style={styles.label}>Postal Code</label>
-                    <input
-                      type="text"
-                      name="postalCode"
-                      value={formData.postalCode}
-                      onChange={handleChange}
-                      style={styles.input}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button type="submit" style={styles.payButton}>
-                  Continue to payment
-                </button>
-              </form>
+                ))}
+              </div>
             )}
-
-            {step === 'payment' && (
-              <form onSubmit={handlePlaceOrder} style={styles.formSection}>
-                <h3 style={styles.sectionTitle}>Payment</h3>
-
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Payment method</label>
-                  <select
-                    name="paymentMethod"
-                    value={formData.paymentMethod}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  >
-                    <option value="Stripe">Stripe (simulated)</option>
-                    <option value="PayPal">PayPal (simulated)</option>
-                  </select>
-                </div>
-
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Card Details (Simulated)</label>
-                  <input
-                    type="text"
-                    name="cardNumber"
-                    value={formData.cardNumber}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-
-                {submitError && (
-                  <p style={{ color: '#b91c1c', margin: 0 }}>{submitError}</p>
-                )}
-
-                <div style={styles.buttonRow}>
-                  <button
-                    type="button"
-                    style={styles.secondaryButton}
-                    onClick={() => setStep('shipping')}
-                    disabled={submitting}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    style={{
-                      ...styles.payButton,
-                      opacity: submitting ? 0.7 : 1,
-                      cursor: submitting ? 'wait' : 'pointer',
-                    }}
-                    disabled={submitting}
-                  >
-                    {submitting
-                      ? 'Processing…'
-                      : `Place order · ${formatRands(totalCents)}`}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {orderSummary}
           </div>
-        )}
+
+          <div>
+            <div className="brutalist-summary-line">
+              <span>SUBTOTAL</span>
+              <span>{formatRands(subtotalCents)}</span>
+            </div>
+            <div className="brutalist-summary-line">
+              <span>TAXES</span>
+              <span>{formatRands(shippingCents)}</span>
+            </div>
+            <div className="brutalist-summary-line" style={{ marginTop: '30px', fontWeight: 'bold' }}>
+              <span>TOTAL</span>
+              <span>{formatRands(totalCents)}</span>
+            </div>
+            
+            <span className="brutalist-link">YZY CODE</span>
+          </div>
+        </div>
+
       </div>
-    </div>
+    </main>
   );
 }
-
-const styles = {
-  pageContainer: {
-    backgroundColor: '#f8f9fa',
-    minHeight: '100vh',
-    padding: '40px 20px',
-    color: '#333',
-  },
-  wrapper: {
-    maxWidth: '900px',
-    margin: '0 auto',
-    backgroundColor: '#ffffff',
-    padding: '30px',
-    borderRadius: '12px',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
-  },
-  headerTitle: {
-    marginBottom: '20px',
-    fontSize: '1.8rem',
-    color: '#111',
-    borderBottom: '2px solid #eee',
-    paddingBottom: '10px',
-  },
-  stepper: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '28px',
-    gap: '8px',
-  },
-  stepItem: {
-    display: 'flex',
-    alignItems: 'center',
-    flex: 1,
-    gap: '8px',
-  },
-  stepDot: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '0.85rem',
-    fontWeight: '700',
-    flexShrink: 0,
-  },
-  stepLabel: {
-    fontSize: '0.9rem',
-  },
-  stepLine: {
-    flex: 1,
-    height: '2px',
-    backgroundColor: '#e5e7eb',
-    marginLeft: '8px',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1.2fr 0.8fr',
-    gap: '30px',
-  },
-  formSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '15px',
-  },
-  summarySection: {
-    backgroundColor: '#fdfdfd',
-    padding: '20px',
-    borderRadius: '8px',
-    border: '1px solid #eaeaea',
-    height: 'fit-content',
-  },
-  sectionTitle: {
-    fontSize: '1.2rem',
-    marginBottom: '10px',
-    color: '#444',
-  },
-  inputGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '5px',
-  },
-  inputGroupHalf: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '5px',
-    flex: 1,
-  },
-  row: {
-    display: 'flex',
-    gap: '15px',
-  },
-  buttonRow: {
-    display: 'flex',
-    gap: '12px',
-    marginTop: '8px',
-  },
-  label: {
-    fontSize: '0.85rem',
-    fontWeight: '600',
-    color: '#666',
-  },
-  input: {
-    padding: '10px',
-    borderRadius: '6px',
-    border: '1px solid #ccc',
-    fontSize: '0.95rem',
-  },
-  payButton: {
-    marginTop: '8px',
-    backgroundColor: '#2563eb',
-    color: '#fff',
-    border: 'none',
-    padding: '12px',
-    borderRadius: '6px',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    flex: 1,
-  },
-  secondaryButton: {
-    marginTop: '8px',
-    backgroundColor: '#fff',
-    color: '#374151',
-    border: '1px solid #d1d5db',
-    padding: '12px 16px',
-    borderRadius: '6px',
-    fontSize: '1rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  itemList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    maxHeight: '200px',
-    overflowY: 'auto',
-  },
-  itemRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    fontSize: '0.9rem',
-  },
-  itemName: {
-    fontWeight: '500',
-    margin: 0,
-  },
-  itemQty: {
-    fontSize: '0.8rem',
-    color: '#777',
-    margin: 0,
-  },
-  itemPrice: {
-    fontWeight: '600',
-    margin: 0,
-  },
-  divider: {
-    border: '0',
-    borderTop: '1px solid #eee',
-    margin: '15px 0',
-  },
-  summaryLine: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.9rem',
-    marginBottom: '8px',
-    color: '#555',
-  },
-  successBox: {
-    textAlign: 'left',
-    padding: '32px',
-    backgroundColor: '#f0fdf4',
-    border: '1px solid #bbf7d0',
-    borderRadius: '8px',
-    color: '#166534',
-  },
-  confirmDetails: {
-    marginTop: '20px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-    backgroundColor: '#fff',
-    border: '1px solid #bbf7d0',
-    borderRadius: '8px',
-    padding: '16px',
-    color: '#14532d',
-  },
-  confirmRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: '16px',
-    fontSize: '0.95rem',
-    wordBreak: 'break-all',
-  },
-  confirmShipping: {
-    marginTop: '16px',
-    fontSize: '0.95rem',
-    color: '#166534',
-  },
-  confirmShippingTitle: {
-    fontWeight: '700',
-    margin: '0 0 6px 0',
-  },
-  confirmActions: {
-    marginTop: '20px',
-    display: 'flex',
-    gap: '16px',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  confirmPrimaryLink: {
-    fontWeight: 'bold',
-    color: '#166534',
-    textDecoration: 'underline',
-  },
-  confirmSecondaryLink: {
-    fontWeight: '600',
-    color: '#3f6212',
-    textDecoration: 'none',
-  },
-};
