@@ -63,11 +63,12 @@ describe('ProductDetail page', () => {
 
   it('renders product details and image gallery from the API', async () => {
     renderPage()
-
+    
     expect(await screen.findByRole('heading', { name: 'Wireless Mouse' })).toBeInTheDocument()
     expect(screen.getByText('A comfortable wireless mouse.')).toBeInTheDocument()
     expect(screen.getByText('SKU MOUSE-1')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'Wireless Mouse' })).toHaveAttribute('src', '/mouse-front.jpg')
+    const images = screen.getAllByRole('img', { name: 'Wireless Mouse' })
+    expect(images[0]).toHaveAttribute('src', '/mouse-front.jpg')
     expect(screen.getByRole('button', { name: 'Show image 2' })).toBeInTheDocument()
   })
 
@@ -76,17 +77,18 @@ describe('ProductDetail page', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Wireless Mouse' })
-    await user.click(screen.getByRole('button', { name: 'Show image 2' }))
+    await user.click(screen.getAllByRole('button', { name: 'Show image 2' })[0])
 
-    expect(screen.getByRole('img', { name: 'Wireless Mouse' })).toHaveAttribute('src', '/mouse-side.jpg')
+    const images = screen.getAllByRole('img', { name: 'Wireless Mouse' })
+    expect(images[0]).toHaveAttribute('src', '/mouse-side.jpg')
   })
 
   it('adds the selected quantity to the bag when clicked', async () => {
     const user = userEvent.setup()
     renderPage()
 
-    await screen.findByRole('heading', { name: 'Wireless Mouse' })
-    await user.click(screen.getByRole('button', { name: 'Add to bag' }))
+    await screen.findAllByRole('heading', { name: 'Wireless Mouse' })[0]
+    await user.click(screen.getAllByRole('button', { name: 'Add to bag' })[0])
 
     expect(addToCart).toHaveBeenCalledWith(product, 1)
   })

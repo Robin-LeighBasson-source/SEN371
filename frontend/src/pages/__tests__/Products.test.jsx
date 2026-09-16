@@ -52,7 +52,8 @@ describe('Products page', () => {
     render(<Products />, { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
 
     await screen.findByText('Wireless Mouse')
-    await user.click(screen.getByRole('button', { name: /Accessories/ }))
+    const categoryButtons = screen.getAllByRole('button', { name: /Accessories/ })
+    await user.click(categoryButtons[0])
 
     await waitFor(() => {
       expect(getMock).toHaveBeenCalledWith(expect.stringContaining('category_id=cat-1'), expect.any(AbortSignal))
@@ -63,8 +64,9 @@ describe('Products page', () => {
     const user = userEvent.setup()
     render(<Products />, { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
 
-    await screen.findByText('Wireless Mouse')
-    await user.click(screen.getByRole('button', { name: '2' }))
+    const elements = await screen.findAllByText('Wireless Mouse')
+    expect(elements[0]).toBeInTheDocument()
+    await user.click(screen.getAllByRole('button', { name: '2' })[0])
 
     await waitFor(() => {
       expect(getMock).toHaveBeenCalledWith(expect.stringContaining('/api/products?page=2&limit=12'), expect.any(AbortSignal))

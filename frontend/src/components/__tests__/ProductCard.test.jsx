@@ -54,7 +54,7 @@ describe('ProductCard', () => {
     const user = userEvent.setup()
     render(<ProductCard product={product} />, { wrapper: MemoryRouter })
 
-    await user.click(screen.getByRole('button', { name: 'Add Test Wireless Mouse to bag' }))
+    await user.click(screen.getAllByRole('button', { name: 'Add Test Wireless Mouse to bag' })[0])
 
     expect(addToCart).toHaveBeenCalledWith(product, 1)
   })
@@ -70,7 +70,7 @@ describe('ProductCard', () => {
     const user = userEvent.setup()
     render(<ProductCard product={product} />, { wrapper: MemoryRouter })
 
-    await user.click(screen.getByRole('button', { name: 'Save for later' }))
+    await user.click(screen.getAllByRole('button', { name: 'Save for later' })[0])
 
     expect(toggleWishlist).toHaveBeenCalledWith(product)
   })
