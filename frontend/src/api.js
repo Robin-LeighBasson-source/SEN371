@@ -1,6 +1,6 @@
 // Every API call goes through here so the base URL, the auth header and the
 // error handling are written once instead of in every page.
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+export const API_BASE = import.meta.env.VITE_API_URL || 'https://sen371-backend.onrender.com/';
 
 async function parse(response) {
   const data = await response.json().catch(() => ({}));
